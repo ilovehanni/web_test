@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>나는 어느 정당 상인가</title>
+</head>
+
+<body>
+    <div>나는 어느 정당 상인가</div>
+    <div id="upload-area">
+        (<span>-</span>
+        <br />
+        <span>사진을 올려놓거나 눌러서 업로드해 주세요! </span>
+        <input style="display: none;" type="file" accept="image/*" onchange="readFile(this.files[0]);" />
+        <div id="result-area" style="display: none;">
+            <img id="upload-image" src="#" alt="your image" />
+        </div>
+        <div id="loading-area" style="display: none;">
+            <span>인공지능 모델을 불러오는 중입니다...</span>
+        </div>
+    </div>
+    <div id='label-container'></div>
+    <div id="webcam-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script type="text/javascript">
+        const URL = "https://teachablemachine.withgoogle.com/models/mONDG9llL/";
+        let loadingArea = document.getElementById("loading-area");
+        let model, webcam, labelContainer, maxPredictions;
+        let isModelReady = false;
+        let input = document.getElementById("upload-input");
+        let image = document.getElementById("upload-image");
+        let uploadArea = document.getElementById("upload-area");
+        let resultArea = document.getElementById("result-area");
+        let retryArea = document.getElementById("retry-area");
+        const reader = new FileReader();
+
+        async function readFile(file) {
+            uploadArea.style.display = "none";
+            loadingArea.style.display = "block";
+            await init();
+            reader.readAsDataURL(file);
+        }
+
+        reader.onload = async function (event) {
+            image.setAttribute('src', event.target.result);
+            await predict();
+            loadingArea.style.display = "none";
+            resultArea.style.display = "block";
+            retryArea.style.display = "block";
+        };
+
+        uploadArea.onclick = function () {
+            retryArea.style.display = "none";
+            resultArea.style.display = "none";
+            uploadArea.style.display = "block";
+        }
+
+        input.click();
+
+        uploadArea.ondragover = function (event) {
+            event.preventDefault();
+        }
+
+        uploadArea.ondrop = function (event) {
+            event.preventDefault();
+            const file = event.dataTransfer.files[0];
+            readFile(file);
+        }
+
+        async function init() {
+            if (!isModelReady) {
+                const modelURL = URL + "model.json";
+                const metadataURL = URL + "metadata.json";
+
+                model = await tmImage.load(modelURL, metadataURL);
+                maxPredictions = model.getTotalClasses();
+
+                const flip = true;
+                webcam = new tmImage.Webcam(200, 200, flip);
+                await webcam.setup();
+                await webcam.play();
+                window.requestAnimationFrame(loop);
+
+                document.getElementById("webcam-container").appendChild(webcam.canvas);
+                labelContainer = document.getElementById("label-container");
+                for (let i = 0; i < maxPredictions; i++) {
+                    labelContainer.appendChild(document.createElement("div"));
+                }
+            }
+        }
+
+        async function loop() {
+            webcam.update();
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        async function predict() {
+            const prediction = await model.predict(webcam.canvas);
+            prediction.sort((x, y) => y.probability - x.probability);
+
+            switch (prediction[0].className) {
+                case "더불어민주당":
+                    labelContainer.childNodes[0].innerHTML = "<h3>당신은 더불어민주당 상!</h3>";
+                    break;
+                case "국민의힘":
+                    labelContainer.childNodes[0].innerHTML = "<h3>당신은 국민의 힘 상 ! </h3>";
+                    break;
+                case "국가혁명당":
+                    labelContainer.childNodes[0].innerHTML = "<h3>당신은 국가혁명당 상!</h3>";
+                    break;
+                case "공산당":
+                    labelContainer.childNodes[0].innerHTML = "<h3>당신은 공산당 상!</h3>";
+                    break;
+                default:
+                    labelContainer.childNodes[0].innerHTML = "<h3>오류 발생</h3>";
+                    break;
+            }
+
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction =
+                    prediction[i].className + ": " + Math.round(prediction[i].probability * 100) + "%";
+                labelContainer.childNodes[i + 1].innerHTML = classPrediction;
+            }
+
+            isModelReady = true;
+        }
+    </script>
+</body>
+
+</html>
